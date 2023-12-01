@@ -1,0 +1,27 @@
+version: '3.3'
+
+services:
+  mysql:
+    image: mysql:8.2
+    restart: always
+    environment:
+      MYSQL_DATABASE: 'imageTagging'
+      MYSQL_ROOT_PASSWORD: 'changeMe'
+    ports:
+      - '3306:3306'
+    volumes:
+      - database:/var/lib/mysql
+
+  imageTagging:
+    depends_on:
+      - mysql
+    image: behnke19/imagetagging
+    environment:
+      imagga-key: ${imaggakey}
+      imagga-secret: ${imaggasecret}
+      MYSQL_HOST: mysql
+    ports:
+      - '8080:8080'
+
+volumes:
+  database:
