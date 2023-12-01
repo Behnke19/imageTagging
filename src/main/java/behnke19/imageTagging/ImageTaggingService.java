@@ -29,14 +29,43 @@ public class ImageTaggingService {
     }
 
     /**
-     * Uses imagga to tag objects in the provided image file.
-     * @param imageFile
+     * Uses imagga to detect objects in the given image and populates the detectedObjects field of the image
      * @param image
      * @throws Exception
      */
-    public void detectObjectsInImage(File imageFile, Image image) throws Exception {
+    public void detectObjectsInImage(Image image) throws Exception {
+        // the image should only have one of URL or content populated
+        if (image.getImageUrl() != null) {
+            detectObjectsInImageUrl(image);
+        } else {
+            detectObjectsInImageFile(image);
+        }
+    }
+
+    /**
+     * Uses imagga to tag objects in the image using the imageContent to upload a file.
+     * @param image
+     * @throws Exception
+     */
+    public void detectObjectsInImageFile(Image image) throws Exception {
+        // save the image content to a temp file to
+        File tmpFile = new File("/tmp/image" + System.currentTimeMillis() + ".tmp");
+        FileOutputStream outputStream = new FileOutputStream(tmpFile);
+        try {
+            outputStream.write(image.getImageContent());
+        } finally {
+            outputStream.close();
+        }
         // first we must upload the image
-        String upload_id = uploadFileToImagga(imageFile);
+        String upload_id;
+        try {
+            upload_id = uploadFileToImagga(tmpFile);
+        } catch (Exception ex) {
+            throw new Exception("Error uploading file");
+        } finally {
+            tmpFile.delete(); // make sure the tmp file is cleaned up even if there was an error on upload
+        }
+
 
         // now we can pass the upload id to the tags endpoint
         StringBuilder urlBuilder = new StringBuilder();
@@ -50,16 +79,15 @@ public class ImageTaggingService {
     }
 
     /**
-     * Uses imagga to tag objects in the image at the provided url.
-     * @param url
+     * Uses imagga to tag objects in the image using the image url.
      * @param image
      * @throws Exception
      */
-    public void detectObjectsInImage(String url, Image image) throws Exception {
+    public void detectObjectsInImageUrl(Image image) throws Exception {
         StringBuilder urlBuilder = new StringBuilder();
         urlBuilder.append(tags_endpoint);
         urlBuilder.append("?image_url=");
-        urlBuilder.append(url);
+        urlBuilder.append(image.getImageUrl());
         // the imagga docs say tags with a confidence lower than 30 are likely to be wrong so ignore them
         urlBuilder.append("&threshold=30.0");
         String tagsJsonResponse = getImageTags(urlBuilder.toString());

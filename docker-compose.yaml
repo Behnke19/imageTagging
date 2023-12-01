@@ -11,10 +11,15 @@ services:
       - '3306:3306'
     volumes:
       - database:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysql", "-uroot", "-pchangeMe", "-e", "USE imageTagging;"]
+      retries: 10
+      start_interval: 10s
 
   imageTagging:
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     image: behnke19/imagetagging
     environment:
       imagga-key: ${imaggakey}

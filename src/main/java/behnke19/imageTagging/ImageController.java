@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.io.File;
+import java.io.IOException;
 import java.util.*;
 
 @RestController
@@ -20,7 +20,7 @@ public class ImageController {
     /**
      * GET endpoint to fetch all images in the database. An optional 'objects' query param
      * can be provided to search only for images that contain the given objects.
-     * @param objects comma separated list of objects
+     * @param objects comma separated list of objects (optional)
      * @return
      */
     @GetMapping("/images")
@@ -33,6 +33,7 @@ public class ImageController {
             List<String> targetObjects = Arrays.asList(objects.split(","));
             LinkedList<Image> matchingImages = new LinkedList<>();
             List<Image> imagesWithTags = repository.findByDetectedObjectsIn(targetObjects);
+            // I interpreted the prompt to mean that the image must have all the provided tags to be included
             for (Image potentialMatch : imagesWithTags) {
                 // for performance reasons convert the list to a set so contains checks are more efficient.
                 // we don't care about duplicates when checking contains anyway
@@ -92,27 +93,23 @@ public class ImageController {
             image.setLabel("image-" + System.currentTimeMillis());
         }
 
+        if (file != null) {
+            try {
+                image.setImageContent(file.getBytes());
+            } catch (IOException ex) {
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error saving image file.");
+            }
+        } else {
+            image.setImageUrl(URL);
+        }
+
+        // detect objects if relevant
         if (detectObjects != null && detectObjects) {
             ImageTaggingService taggingService = new ImageTaggingService();
-            if (file != null) {
-                // a file was provided... lets upload it to imagga and process it.
-                File tmpFile = new File("/tmp/image" + System.currentTimeMillis() + ".tmp");
-                try {
-                    file.transferTo(tmpFile);
-                    taggingService.detectObjectsInImage(tmpFile, image);
-                } catch (Exception ex) {
-                    throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error processing image file.");
-                } finally {
-                    tmpFile.delete(); // cleanup
-                }
-            } else {
-                // we know file is null and URL is non null so send the url to imagga for processing
-                try {
-                    taggingService.detectObjectsInImage(URL, image);
-                } catch (Exception ex) {
-                    throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error tagging image");
-                }
-
+            try {
+                taggingService.detectObjectsInImage(image);
+            } catch (Exception ex) {
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error processing image.");
             }
         }
 
